@@ -35,9 +35,10 @@ export async function updateContentStatus(
 
   if (error) {
     console.error('Error updating content status:', error);
-    return;
+    return { error: error.message };
   }
 
   revalidatePath('/dashboard');
   revalidatePath(`/review/${id}`);
+  return { success: true };
 }
