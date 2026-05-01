@@ -8,16 +8,19 @@ export async function createContentPiece(formData: FormData) {
   const title = formData.get('title') as string;
   const video_url = formData.get('video_url') as string;
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('content_pieces')
-    .insert([{ title, video_url, status: 'Pending' }]);
+    .insert([{ title, video_url, status: 'Pending' }])
+    .select('id')
+    .single();
 
   if (error) {
     console.error('Error creating content piece:', error);
-    return;
+    return { error: error.message };
   }
 
   revalidatePath('/dashboard');
+  return { id: data.id };
 }
 
 export async function updateContentStatus(
