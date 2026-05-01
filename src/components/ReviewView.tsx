@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { updateContentStatus } from '@/app/actions';
-import { ContentPiece } from '@/types/content';
+import { ContentPiece, ContentStatus } from '@/types/content';
 import { Check, X, Send, Loader2, ChevronLeft, Calendar, Play } from 'lucide-react';
 import { getEmbedUrl } from '@/lib/video';
 import { useRouter } from 'next/navigation';
@@ -11,18 +11,23 @@ import Link from 'next/link';
 export default function ReviewView({ piece }: { piece: ContentPiece }) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
+  // Use local state to show change immediately after action
+  const [currentStatus, setCurrentStatus] = useState<ContentStatus>(piece.status);
+  const [currentFeedback, setCurrentFeedback] = useState<string | null>(piece.feedback);
+
   const handleApprove = async () => {
-    setIsSubmitting(true);
-    const result = await updateContentStatus(piece.id, 'Approved');
-    if (result.success) {
-      router.refresh();
-    } else {
-      alert(`Error: ${result.error}`);
-    }
-    setIsSubmitting(false);
+    startTransition(async () => {
+      const result = await updateContentStatus(piece.id, 'Approved');
+      if (result.success) {
+        setCurrentStatus('Approved');
+        router.refresh();
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    });
   };
 
   const handleReject = async () => {
@@ -30,14 +35,17 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
       setShowFeedback(true);
       return;
     }
-    setIsSubmitting(true);
-    const result = await updateContentStatus(piece.id, 'Rejected', feedback);
-    if (result.success) {
-      router.refresh();
-    } else {
-      alert(`Error: ${result.error}`);
-    }
-    setIsSubmitting(false);
+    startTransition(async () => {
+      const result = await updateContentStatus(piece.id, 'Rejected', feedback);
+      if (result.success) {
+        setCurrentStatus('Rejected');
+        setCurrentFeedback(feedback);
+        setShowFeedback(false);
+        router.refresh();
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    });
   };
 
   const embedUrl = getEmbedUrl(piece.video_url);
@@ -54,16 +62,16 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold tracking-widest uppercase text-slate-400">Status</span>
             <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
-              piece.status === 'Pending' ? 'bg-amber-100 text-amber-700' :
-              piece.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+              currentStatus === 'Pending' ? 'bg-amber-100 text-amber-700' :
+              currentStatus === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
               'bg-rose-100 text-rose-700'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${
-                piece.status === 'Pending' ? 'bg-amber-500' :
-                piece.status === 'Approved' ? 'bg-emerald-500' :
+                currentStatus === 'Pending' ? 'bg-amber-500' :
+                currentStatus === 'Approved' ? 'bg-emerald-500' :
                 'bg-rose-500'
               }`} />
-              {piece.status}
+              {currentStatus}
             </span>
           </div>
         </div>
@@ -97,21 +105,21 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
           )}
         </div>
 
-        {piece.status === 'Pending' && (
+        {currentStatus === 'Pending' && (
           <div className="max-w-2xl mx-auto">
             {!showFeedback ? (
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={handleApprove}
-                  disabled={isSubmitting}
+                  disabled={isPending}
                   className="h-16 bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-200 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
-                  {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
+                  {isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
                   Approve Video
                 </button>
                 <button
                   onClick={handleReject}
-                  disabled={isSubmitting}
+                  disabled={isPending}
                   className="h-16 bg-white text-rose-600 border-2 border-rose-100 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-rose-50 hover:border-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
                   <X className="w-6 h-6" />
@@ -132,10 +140,10 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
                 <div className="flex gap-4">
                   <button
                     onClick={handleReject}
-                    disabled={isSubmitting || !feedback.trim()}
+                    disabled={isPending || !feedback.trim()}
                     className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-[0.98] disabled:opacity-50"
                   >
-                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    {isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                     Submit Feedback
                   </button>
                   <button
@@ -150,28 +158,28 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
           </div>
         )}
 
-        {(piece.status === 'Approved' || piece.status === 'Rejected') && (
+        {(currentStatus === 'Approved' || currentStatus === 'Rejected') && (
           <div className="max-w-2xl mx-auto bg-white border border-slate-200 rounded-[32px] p-12 text-center shadow-sm">
             <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 ${
-              piece.status === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+              currentStatus === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
             }`}>
-              {piece.status === 'Approved' ? (
+              {currentStatus === 'Approved' ? (
                 <Check className="w-10 h-10" />
               ) : (
                 <X className="w-10 h-10" />
               )}
             </div>
             <h2 className="text-3xl font-black text-slate-900 mb-3">
-              Content {piece.status}
+              Content {currentStatus}
             </h2>
             <p className="text-slate-500 mb-8 font-medium">
               This review is now closed.
             </p>
-            {piece.feedback && (
+            {currentFeedback && (
               <div className="bg-slate-50 rounded-2xl p-6 text-left border border-slate-100">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Client Feedback</span>
                 <p className="text-slate-700 italic leading-relaxed">
-                  "{piece.feedback}"
+                  "{currentFeedback}"
                 </p>
               </div>
             )}
