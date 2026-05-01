@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { updateContentStatus } from '@/app/actions';
 import { ContentPiece, ContentStatus } from '@/types/content';
 import { Check, X, Send, Loader2, ChevronLeft, Calendar, Play } from 'lucide-react';
@@ -11,23 +11,28 @@ import Link from 'next/link';
 export default function ReviewView({ piece }: { piece: ContentPiece }) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [isPending, startTransition] = useTransition();
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  // Use local state to show change immediately after action
+  // Local state for immediate UI feedback
   const [currentStatus, setCurrentStatus] = useState<ContentStatus>(piece.status);
   const [currentFeedback, setCurrentFeedback] = useState<string | null>(piece.feedback);
 
   const handleApprove = async () => {
-    startTransition(async () => {
+    setIsLoading(true);
+    try {
       const result = await updateContentStatus(piece.id, 'Approved');
-      if (result.success) {
+      if (result?.success) {
         setCurrentStatus('Approved');
         router.refresh();
       } else {
-        alert(`Error: ${result.error}`);
+        alert(`Failed to approve: ${result?.error || 'Unknown error'}`);
       }
-    });
+    } catch (err) {
+      alert('A network error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleReject = async () => {
@@ -35,17 +40,23 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
       setShowFeedback(true);
       return;
     }
-    startTransition(async () => {
+    
+    setIsLoading(true);
+    try {
       const result = await updateContentStatus(piece.id, 'Rejected', feedback);
-      if (result.success) {
+      if (result?.success) {
         setCurrentStatus('Rejected');
         setCurrentFeedback(feedback);
         setShowFeedback(false);
         router.refresh();
       } else {
-        alert(`Error: ${result.error}`);
+        alert(`Failed to reject: ${result?.error || 'Unknown error'}`);
       }
-    });
+    } catch (err) {
+      alert('A network error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const embedUrl = getEmbedUrl(piece.video_url);
@@ -111,15 +122,15 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={handleApprove}
-                  disabled={isPending}
+                  disabled={isLoading}
                   className="h-16 bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-200 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
-                  {isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
+                  {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
                   Approve Video
                 </button>
                 <button
                   onClick={handleReject}
-                  disabled={isPending}
+                  disabled={isLoading}
                   className="h-16 bg-white text-rose-600 border-2 border-rose-100 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-rose-50 hover:border-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
                   <X className="w-6 h-6" />
@@ -140,10 +151,10 @@ export default function ReviewView({ piece }: { piece: ContentPiece }) {
                 <div className="flex gap-4">
                   <button
                     onClick={handleReject}
-                    disabled={isPending || !feedback.trim()}
+                    disabled={isLoading || !feedback.trim()}
                     className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-[0.98] disabled:opacity-50"
                   >
-                    {isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                     Submit Feedback
                   </button>
                   <button
